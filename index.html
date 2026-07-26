@@ -768,7 +768,7 @@ function clearWorld(){
 /* ================= PLAYER ================= */
 const PW=0.22;                      // полуширина игрока — хитбокс по телу
 let heroRig=null,skin=null,heroId=0,player=null,camZ=0,state='menu',score=0,T=0,runCoins=0,emit=0;
-let ultCharge=0, ult={on:false,t:0,fired:false};
+let ultCharge=0, noChargeUntil=0, ult={on:false,t:0,fired:false};
 const fx=[];
 function spawnPlayer(){
   if(heroRig)scene.remove(heroRig.group);
@@ -794,7 +794,7 @@ function tryMove(dx,dy){
   if(nx===player.x&&ny===player.y)return;
   player.ox=player.x;player.oy=player.y;player.x=nx;player.y=ny;player.anim=0;
   if(dx)player.face=dx>0?Math.PI/2:-Math.PI/2; else player.face=dy>0?Math.PI:0;
-  if(ny>score){ advance(ny-score); score=ny; }       // 25 шагов до ульты, 15 шагов перезарядки
+  if(ny>score){ advance(score,ny); score=ny; }
   if(mode.on){
     const a=Math.min(player.oy,ny), b=Math.max(player.oy,ny);
     for(let y=a;y<=b;y++)plow(y,nx);
@@ -805,7 +805,12 @@ function addUlt(v){
   if(ult.on||mode.on)return;      // пока идёт катсцена или легендарная форма — ульта не копится
   ultCharge=clamp(ultCharge+v,0,100); paintUlt();
 }
-function advance(n){ if(n>0)addUlt(4*n); }   // 25 шагов вперёд = полная ульта
+/* ряды, расчищенные ударной волной, в накопление не идут */
+function advance(from,to){
+  const start=Math.max(from,noChargeUntil);
+  const n=to-start;
+  if(n>0)addUlt(4*n);            // 25 засчитанных шагов = полная ульта
+}
 /* режим сносит всё, во что въезжает */
 function plow(y,x){
   const r=row(y), R=(mode.kind==='giant')?1.6:1.2;
@@ -876,7 +881,7 @@ function jutsu(){
     }
     if(!steps){player.cd=0;SFX.block();return}
     player.ox=player.x;player.oy=player.y-steps;player.anim=0;player.face=Math.PI;
-    if(player.y>score){advance(player.y-score);score=player.y}
+    if(player.y>score){advance(score,player.y);score=player.y}
     const g=new THREE.Group();
     for(let i=0;i<steps*5;i++)
       g.add(box(0.1,0.1,0.3,new THREE.MeshBasicMaterial({color:skin.atk,transparent:true,opacity:.95}),
@@ -956,6 +961,7 @@ function fireUlt(){
 }
 function ultBlast(){
   let killed=0;
+  noChargeUntil=player.y+15;      // расчищенный коридор ульту не заряжает
   for(let y=player.y-4;y<=player.y+15;y++){
     const r=row(y);
     if(r.type==='road'||r.type==='gate')
@@ -1278,7 +1284,7 @@ function show(v){
   document.getElementById('hud').style.pointerEvents=v?'none':'';
 }
 function startRun(){
-  clearWorld(); score=0; runCoins=0; ultCharge=0; ult={on:false,t:0,fired:false,kind:null}; stopMode();
+  clearWorld(); score=0; runCoins=0; ultCharge=0; noChargeUntil=0; ult={on:false,t:0,fired:false,kind:null}; stopMode();
   viewSize=11; applyCam(); paintUlt();
   document.getElementById('cut').classList.remove('on');
   spawnPlayer(); camZ=rowZ(1);
