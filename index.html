@@ -107,7 +107,6 @@
   .bRow .pl{font-family:'Rubik Mono One';font-size:14px;width:30px;opacity:.7}
   .bRow .pl.g1{color:#ffd257;opacity:1}.bRow .pl.g2{color:#cfd6de;opacity:1}.bRow .pl.g3{color:#d79a63;opacity:1}
   .bRow .nm{flex:1;font:600 13.5px/1.2 'Rubik';overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .bRow .nm small{display:block;font-weight:400;font-size:10.5px;opacity:.55;margin-top:2px}
   .bRow .sc{font-family:'Rubik Mono One';font-size:17px;color:var(--gold)}
   .machine{align-self:center;width:200px;margin:2px 0}
   .glass{height:138px;border:4px solid var(--paper);border-radius:100px 100px 14px 14px;
@@ -1204,12 +1203,12 @@ function lbSaveLocal(list){ try{localStorage.setItem(LB_KEY,JSON.stringify(list)
 
 function lbLoad(){
   if(netOn()){
-    return fetch(NET.url.replace(/\/$/,'')+'/rest/v1/scores?select=name,score,skin&order=score.desc&limit=50',
+    return fetch(NET.url.replace(/\/$/,'')+'/rest/v1/scores?select=name,score&order=score.desc&limit=50',
       {headers:netHead()})
       .then(function(r){ if(!r.ok)throw 0; return r.json() })
       .then(function(rows){
         boardMode='net';
-        return rows.map(function(x){return {n:x.name,s:x.score,k:x.skin}});
+        return rows.map(function(x){return {n:x.name,s:x.score}});
       })
       .catch(function(){ boardMode='fail'; return lbLocal() });
   }
@@ -1224,7 +1223,7 @@ function lbLoad(){
 function lbSubmit(){
   if(!save.name||!score)return Promise.resolve();
   const base=NET.url.replace(/\/$/,'');
-  const rec={name:save.name,score:score,skin:HEROES[heroId].name+' · '+skin.name};
+  const rec={name:save.name,score:score};   // один общий рекорд на ник
   if(netOn()){
     return fetch(base+'/rest/v1/scores?select=score&name=eq.'+encodeURIComponent(save.name),{headers:netHead()})
       .then(function(r){ return r.ok?r.json():[] })
@@ -1242,8 +1241,8 @@ function lbSubmit(){
     board=list||[];
     let me=null;
     for(let i=0;i<board.length;i++)if(board[i].n===save.name){me=board[i];break}
-    if(!me){ me={n:save.name,s:0,k:''}; board.push(me) }
-    if(score>me.s){ me.s=score; me.k=rec.skin; me.t=Date.now() }
+    if(!me){ me={n:save.name,s:0}; board.push(me) }
+    if(score>me.s){ me.s=score; me.t=Date.now() }
     board.sort(function(a,b){return b.s-a.s});
     if(board.length>100)board.length=100;
     lbSaveLocal(board);
@@ -1263,13 +1262,13 @@ function paintBoard(){
         const d=document.createElement('div');
         d.className='bRow'+(e.n===save.name?' me':'');
         d.innerHTML='<span class="pl'+(i<3?' g'+(i+1):'')+'">'+(i+1)+'</span>'+
-          '<span class="nm">'+String(e.n).replace(/[<>&]/g,'')+'<small>'+(e.k||'—')+'</small></span>'+
+          '<span class="nm">'+String(e.n).replace(/[<>&]/g,'')+'</span>'+
           '<span class="sc">'+e.s+'</span>';
         el.appendChild(d);
       });
     }
     const NOTE={
-      net:'Общий сервер подключён — здесь рекорды всех игроков.',
+      net:'Общий сервер подключён. Один ник — один общий рекорд, герой и скин значения не имеют.',
       artifact:'Общая таблица внутри чата: видны рекорды всех, кто открывал игру тут.',
       fail:'Сервер не отвечает — показаны локальные рекорды.',
       local:'Сервер не подключён — таблица хранится только на этом устройстве.'
@@ -1399,8 +1398,15 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 resize();
+const WIPE=1;   // поднять номер, чтобы снова обнулить рекорды всем
 DB.get().then(v=>{
   if(v){try{Object.assign(save,JSON.parse(v))}catch(e){}}
+  if(save.wipe!==WIPE){                 // сброс рекордов, прогресс остаётся
+    save.best=0; save.wipe=WIPE;
+    try{localStorage.removeItem(LB_KEY)}catch(e){}
+    if(window.storage){ try{ window.storage.set(LB_KEY,'[]',true) }catch(e){} }
+    persist();
+  }
   A.on=save.sound!==false;
   document.getElementById('mute').classList.toggle('off',!A.on);
   paintPurse();
