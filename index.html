@@ -27,7 +27,7 @@
     display:grid;place-items:center;font-size:15px;background:rgba(20,18,28,.45)}
   .mini.off{opacity:.4}
 
-  .ultbar{position:absolute;left:16px;top:104px;width:132px}
+  .ultbar{position:absolute;left:16px;top:104px;width:170px}
   .ultbar .track{height:9px;border:2px solid rgba(232,224,207,.55);background:rgba(0,0,0,.35);overflow:hidden}
   .ultbar .val{height:100%;width:0%;background:var(--ult);transition:width .18s}
   .ultbar label{display:block;font-size:9.5px;font-weight:600;letter-spacing:.24em;opacity:.7;margin-top:5px}
@@ -136,7 +136,7 @@
       <button class="mini" id="mute">♪</button>
     </div>
     <div class="modeTimer" id="modeTimer"></div>
-    <div class="ultbar"><div class="track"><div class="val" id="ultVal"></div></div><label>ульта</label></div>
+    <div class="ultbar"><div class="track"><div class="val" id="ultVal"></div></div><label id="ultLabel">ульта</label></div>
     <div class="jname" id="jname"></div>
     <div class="jutsu">
       <div class="orb" id="orb"><div class="fill" id="fill"></div><div class="glyph" id="glyph">◉</div></div>
@@ -396,7 +396,7 @@ const SKINS=[
   {id:'kai_forge',h:0,r:'epic',name:'Кузнец пламени',desc:'Маска они с рогами, широкие плечи, тлеющие угли вверх.',
    body:0x40323a,accent:0xff6a2b,cape:0x1f1a22,capeLen:3,hat:'oni',bulk:1.18,scale:1.03,
    trail:'ember',tc:0xff7a2a,atk:0xff5a1e,ring:0xffc08a},
-  {id:'kai_sun',h:0,r:'legend',name:'Солнечный ками',desc:'★ Нимб, плащ до земли. Ульта: огненный мотоцикл на 15 секунд, сносит всё на пути.',
+  {id:'kai_sun',h:0,r:'legend',name:'Солнечный ками',desc:'★ Нимб, плащ до земли. Ульта: огненный мотоцикл на 7 секунд, сносит всё на пути.',
    body:0xf0d68a,accent:0xffffff,cape:0xe0a626,capeLen:4,hat:'halo',bulk:1.02,scale:1.06,
    trail:'sun',tc:0xffdf7a,atk:0xfff6d0,ring:0xffffff,aura:0xffd257,ultKind:'bike'},
 
@@ -412,7 +412,7 @@ const SKINS=[
   {id:'ren_onyx',h:1,r:'epic',name:'Оникс-гвардия',desc:'Тяжёлый шлем с гребнем, массивный доспех, красные искры.',
    body:0x211d2b,accent:0xd2382b,cape:0x120f18,capeLen:3,hat:'helm',bulk:1.35,scale:1.09,
    trail:'ember',tc:0xff3a2a,atk:0xff4a3a,ring:0xffb0a4},
-  {id:'ren_dragon',h:1,r:'legend',name:'Гром-дракон',desc:'★ Рогатая пасть, пурпурная аура. Ульта: двойной рост и шаг через две клетки на 10 секунд.',
+  {id:'ren_dragon',h:1,r:'legend',name:'Гром-дракон',desc:'★ Рогатая пасть, пурпурная аура. Ульта: двойной рост и шаг через две клетки на 7 секунд.',
    body:0x3a1f5c,accent:0xb46bff,cape:0x24123c,capeLen:4,hat:'dragon',bulk:1.18,scale:1.05,
    trail:'storm',tc:0xc79bff,atk:0xb46bff,ring:0xf0dcff,aura:0xb46bff,ultKind:'giant'}
 ];
@@ -776,7 +776,7 @@ function spawnPlayer(){
   heroRig=ninjaRig(skin.body,skin.accent,{cape:skin.cape,capeLen:skin.capeLen,aura:skin.aura,
     hat:skin.hat,bulk:skin.bulk,scale:skin.scale,detail:true});
   scene.add(heroRig.group);
-  player={x:0,y:1,ox:0,oy:1,anim:1,cd:0,face:Math.PI};
+  player={x:0,y:1,ox:0,oy:1,anim:1,cd:0,face:Math.PI,sy:0};
   heroRig.group.rotation.y=Math.PI;
   heroRig.group.position.set(0,0,rowZ(1));
 }
@@ -794,14 +794,18 @@ function tryMove(dx,dy){
   if(nx===player.x&&ny===player.y)return;
   player.ox=player.x;player.oy=player.y;player.x=nx;player.y=ny;player.anim=0;
   if(dx)player.face=dx>0?Math.PI/2:-Math.PI/2; else player.face=dy>0?Math.PI:0;
-  if(ny>score){ addUlt(10*(ny-score)); score=ny; }   // ульта: 10 шагов вперёд = полная
+  if(ny>score){ advance(ny-score); score=ny; }       // 25 шагов до ульты, 15 шагов перезарядки
   if(mode.on){
     const a=Math.min(player.oy,ny), b=Math.max(player.oy,ny);
     for(let y=a;y<=b;y++)plow(y,nx);
     if(mode.kind==='giant')SFX.stomp(); else SFX.rev();
   } else SFX.hop();
 }
-function addUlt(v){ ultCharge=clamp(ultCharge+v,0,100); paintUlt(); }
+function addUlt(v){
+  if(ult.on||mode.on)return;      // пока идёт катсцена или легендарная форма — ульта не копится
+  ultCharge=clamp(ultCharge+v,0,100); paintUlt();
+}
+function advance(n){ if(n>0)addUlt(4*n); }   // 25 шагов вперёд = полная ульта
 /* режим сносит всё, во что въезжает */
 function plow(y,x){
   const r=row(y), R=(mode.kind==='giant')?1.6:1.2;
@@ -817,7 +821,9 @@ function plow(y,x){
   }
 }
 function paintUlt(){
-  document.getElementById('ultVal').style.width=ultCharge+'%';
+  const val=document.getElementById('ultVal'), lab=document.getElementById('ultLabel');
+  val.style.width=ultCharge+'%';
+  lab.textContent=ultCharge>=100?'ульта готова':'ульта · '+Math.ceil((100-ultCharge)/4)+' шагов';
   document.getElementById('ultBtn').classList.toggle('show',ultCharge>=100&&!ult.on);
 }
 function burst(x,y,color,n){
@@ -870,7 +876,7 @@ function jutsu(){
     }
     if(!steps){player.cd=0;SFX.block();return}
     player.ox=player.x;player.oy=player.y-steps;player.anim=0;player.face=Math.PI;
-    if(player.y>score){addUlt(10*(player.y-score));score=player.y}
+    if(player.y>score){advance(player.y-score);score=player.y}
     const g=new THREE.Group();
     for(let i=0;i<steps*5;i++)
       g.add(box(0.1,0.1,0.3,new THREE.MeshBasicMaterial({color:skin.atk,transparent:true,opacity:.95}),
@@ -889,8 +895,8 @@ const ULT_LINES=[
   ['РЭН','ГРОМ, РАЗБЕЙ ДОРОГУ']
 ];
 const MODE_DEF={
-  bike:{dur:15,who:'КАЙ · СОЛНЕЧНЫЙ КАМИ',line:'ЖЕЛЕЗНЫЙ КОНЬ СОЛНЦА',label:'МОТОЦИКЛ'},
-  giant:{dur:10,who:'РЭН · ГРОМ-ДРАКОН',line:'ФОРМА ИСПОЛИНА',label:'ИСПОЛИН'}
+  bike:{dur:7,who:'КАЙ · СОЛНЕЧНЫЙ КАМИ',line:'ЖЕЛЕЗНЫЙ КОНЬ СОЛНЦА',label:'МОТОЦИКЛ'},
+  giant:{dur:7,who:'РЭН · ГРОМ-ДРАКОН',line:'ФОРМА ИСПОЛИНА',label:'ИСПОЛИН'}
 };
 let mode={on:false,kind:null,t:0};
 let bike=null,bikeSpin=0;
@@ -1089,6 +1095,15 @@ function update(dt){
     r.coin=null; runCoins++; save.coins++; persist(); SFX.coin();
   }
 
+  // высота опоры: на бревне игрок стоит на его поверхности
+  let standY=0;
+  if(r.type==='water'){
+    const lg=r.items.filter(o=>Math.abs(o.x-player.x)<o.w/2+0.12)[0];
+    if(lg)standY=0.24;
+  }
+  if(player.sy===undefined)player.sy=0;
+  player.sy+=(standY-player.sy)*Math.min(1,dt*16);
+
   const p=player.anim,e=1-Math.pow(1-p,3);
   const px=player.ox+(player.x-player.ox)*e;
   const pz=rowZ(player.oy+(player.y-player.oy)*e);
@@ -1096,9 +1111,9 @@ function update(dt){
   const g=heroRig.group;
   const ride=(mode.on&&mode.kind==='bike')?0.36:0;
   const lift=(ult.on&&ult.t<0.75)?Math.min(0.4,ult.t*0.9):0;
-  g.position.set(px,hop+ride+lift,pz);
+  g.position.set(px,hop+ride+lift+player.sy,pz);
   if(bike&&bike.visible){
-    bike.position.set(px,hop*0.5,pz); bike.rotation.y=g.rotation.y;
+    bike.position.set(px,hop*0.5+player.sy,pz); bike.rotation.y=g.rotation.y;
     bikeSpin+=dt*17;
     bike.userData.wheels.forEach(function(w){w.rotation.x=bikeSpin});
   }
