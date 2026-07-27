@@ -1386,16 +1386,16 @@ function bossStart(){
 /* красный шар: ядро + языки пламени */
 function makeFireball(){
   const g=new THREE.Group();
-  const core=new THREE.Mesh(new THREE.SphereGeometry(0.3,12,10),
+  const core=new THREE.Mesh(new THREE.SphereGeometry(0.24,12,10),
     new THREE.MeshBasicMaterial({color:0xff3b1e}));
-  const inner=new THREE.Mesh(new THREE.SphereGeometry(0.17,10,8),
+  const inner=new THREE.Mesh(new THREE.SphereGeometry(0.13,10,8),
     new THREE.MeshBasicMaterial({color:0xffd27a}));
   g.add(core); g.add(inner);
   const tips=[];
   for(let i=0;i<5;i++){
-    const t=box(0.13,0.13,0.42,new THREE.MeshBasicMaterial({color:0xff7a2a}),0,0,-0.32,true);
+    const t=box(0.1,0.1,0.36,new THREE.MeshBasicMaterial({color:0xff7a2a}),0,0,-0.28,true);
     const a=(i/5)*Math.PI*2;
-    t.position.set(Math.sin(a)*0.16,Math.cos(a)*0.16,-0.34);
+    t.position.set(Math.sin(a)*0.12,Math.cos(a)*0.12,-0.3);
     g.add(t); tips.push(t);
   }
   g.userData.tips=tips;
@@ -1403,30 +1403,53 @@ function makeFireball(){
 }
 /* подсветка дорожки: по этой колонке сейчас прилетит */
 function makeWarn(c){
-  const m=box(0.86,0.02,22,new THREE.MeshBasicMaterial({color:0xff3b1e,transparent:true,opacity:.34}),
+  const m=box(0.96,0.02,22,new THREE.MeshBasicMaterial({color:0xff3b1e,transparent:true,opacity:.34}),
     c,0.03,rowZ(BOSS_Z)+11,true);
   scene.add(m); return m;
 }
+/* колонка занята, если по ней уже светится дорожка
+   или летит шар, который ещё не миновал игрока */
+function laneBusy(c){
+  for(let i=0;i<boss.warn.length;i++) if(boss.warn[i].c===c)return true;
+  for(let i=0;i<boss.fb.length;i++){
+    const b=boss.fb[i];
+    if(b.c===c && b.m.position.z < rowZ(player.y)+1.2) return true;
+  }
+  return false;
+}
 function bossFire(){
-  const R=ROUNDS[boss.round], lanes=[];
+  const R=ROUNDS[boss.round];
+  const me=clamp(Math.round(player.x),-HALF,HALF);
+  const lanes=[];
+  const inBounds=c=>c>=-HALF&&c<=HALF;
   const add=function(c){
-    c=clamp(Math.round(c),-HALF,HALF);
-    if(lanes.indexOf(c)<0){ lanes.push(c); return true }
+    c=Math.round(c);
+    if(!inBounds(c)||lanes.indexOf(c)>=0||laneBusy(c))return false;
+    lanes.push(c); return true;
+  };
+  // после залпа обязан остаться свободный соседний шаг влево или вправо
+  const escapeOK=function(){
+    for(let d=-1;d<=1;d+=2){
+      const c=me+d;
+      if(inBounds(c)&&lanes.indexOf(c)<0&&!laneBusy(c))return true;
+    }
     return false;
   };
-  // 1) главный выстрел — точно в колонку, где сейчас стоит игрок
-  const me=clamp(Math.round(player.x),-HALF,HALF);
-  add(me);
-  // 2) добавочные дорожки — рядом с игроком, но с гарантированным путём для отхода
+  const tryAdd=function(c){ if(add(c)){ if(escapeOK())return true; lanes.pop() } return false };
+
+  add(me);                                   // главный выстрел — точно в игрока
   if(R.lanes>=2){
     const side=Math.random()<0.5?-1:1;
-    if(!add(me+side*ri(2,3)))add(me-side*ri(2,3));
+    if(!tryAdd(me+side*ri(2,3)))tryAdd(me-side*ri(2,3));
   }
   if(R.lanes>=3){
-    const side=Math.random()<0.5?-1:1;        // одну соседнюю зажимаем...
-    if(!add(me+side))add(me-side);            // ...противоположная остаётся свободной
+    const side=Math.random()<0.5?-1:1;
+    if(!tryAdd(me+side))tryAdd(me-side);     // одну соседнюю зажимаем, вторая остаётся
   }
-  while(lanes.length<R.lanes)add(ri(-HALF,HALF));
+  let guard=0;
+  while(lanes.length<R.lanes&&guard++<40)tryAdd(ri(-HALF,HALF));
+
+  if(!lanes.length)return;
   lanes.forEach(function(c){ boss.warn.push({c:c,t:R.warn,m:makeWarn(c)}) });
   SFX.aim();
 }
@@ -1510,9 +1533,11 @@ function bossUpdate(dt){
     m.position.x=b.c;
     m.rotation.z+=dt*6;
     m.userData.tips.forEach(function(t,k){ t.scale.z=1+Math.sin(T*24+k)*0.35 });
-    if(Math.random()<0.7)spawnPart(b.c+rand(-.2,.2),0.75+rand(-.2,.2),m.position.z-0.4,'ember',0xff5a1e);
+    if(Math.random()<0.7)spawnPart(b.c+rand(-.12,.12),0.75+rand(-.15,.15),m.position.z-0.35,'ember',0xff5a1e);
     const inv=(mode.on&&MODE_DEF[mode.kind].invuln)||player.iframe>0;
-    if(!dead&&!inv&&Math.abs(b.c-player.x)<0.5&&Math.abs(m.position.z-rowZ(player.y))<0.5){
+    const sameCell=(Math.round(b.c)===Math.round(player.x));
+    const midJump=(player.anim<1);                 // в прыжке между клетками не задевает
+    if(!dead&&!inv&&!midJump&&sameCell&&Math.abs(m.position.z-rowZ(player.y))<0.45){
       scene.remove(m); boss.fb.splice(i,1);
       return die('ДРАКОН<em>СЖЁГ ТЕБЯ</em>');
     }
