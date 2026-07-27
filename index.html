@@ -165,6 +165,11 @@
     <div class="row"><button class="btn" id="toPlay">Играть</button></div>
     <div class="row"><button class="btn gold" id="toGacha">Автомат · 10 монет</button></div>
     <div class="row"><button class="btn ghost" id="toBoard">Таблица рекордов</button></div>
+    <div class="row nameRow">
+      <input id="codeIn" maxlength="24" placeholder="ввести код" autocomplete="off" spellcheck="false">
+      <button class="btn ghost" id="codeGo" style="flex:0 0 auto;padding:14px 18px">OK</button>
+    </div>
+    <p class="lede" id="codeMsg" style="min-height:18px"></p>
     <p class="lede" style="opacity:.5">Стрелки / WASD — прыжок · Пробел — техника · E — ульта · Телефон: свайпы по экрану и круглые кнопки</p>
     <div class="spacer"></div>
   </div>
@@ -453,7 +458,7 @@ const SKINS=[
 
   {id:'boss_dragon',h:2,r:'legend',name:'Синий дракон',secret:true,
    desc:'★ Побеждённый босс. Способность: 5 секунд огненного дыхания вперёд. Ульта: полёт 7 секунд сквозь всё.',
-   body:0x2f6fb0,accent:0x8fe3ff,cape:0x1b4a7d,capeLen:3,hat:'dragon',bulk:1.2,scale:1.08,wings:0x2f6fb0,
+   body:0x2f6fb0,accent:0x8fe3ff,creature:'dragon',scale:0.92,
    trail:'ember',tc:0x8fe3ff,atk:0x63c8ff,ring:0xffffff,aura:0x63c8ff,ultKind:'fly'}
 ];
 const byId=id=>SKINS.filter(s=>s.id===id)[0];
@@ -715,6 +720,81 @@ function ninjaRig(bodyC,accentC,opt){
     }};
 }
 
+
+/* ================= МОДЕЛЬ ДРАКОНЧИКА (играбельный персонаж) ================= */
+function dragonRig(bodyC,accentC,opt){
+  opt=opt||{};
+  const g=new THREE.Group();
+  const bd=M(bodyC), lt=M(accentC), bel=M(0xdff2ff), horn=M(0xf0e6d2), dark=M(0x152a3f);
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xffe14a});
+
+  g.add(box(0.5,0.4,0.8,bd,0,0.52,0));
+  g.add(box(0.34,0.12,0.66,bel,0,0.34,0.02,true));
+  for(let i=0;i<3;i++)g.add(box(0.06,0.12,0.08,horn,0,0.76,0.16-i*0.22,true));
+
+  const neck=new THREE.Group(); neck.position.set(0,0.66,0.3); g.add(neck);
+  neck.add(box(0.26,0.26,0.28,bd,0,0.06,0.12));
+  const head=new THREE.Group(); head.position.set(0,0.18,0.22); neck.add(head);
+  head.add(box(0.36,0.3,0.34,bd,0,0,0.06));
+  head.add(box(0.24,0.17,0.24,bd,0,-0.05,0.28,true));
+  head.add(box(0.22,0.05,0.2,dark,0,-0.11,0.3,true));
+  head.add(box(0.05,0.04,0.04,dark,-0.06,0.0,0.4,true));
+  head.add(box(0.05,0.04,0.04,dark,0.06,0.0,0.4,true));
+  for(let sd=-1;sd<=1;sd+=2){
+    head.add(box(0.09,0.08,0.06,eyeMat,sd*0.13,0.05,0.21,true));
+    head.add(box(0.07,0.2,0.07,horn,sd*0.11,0.2,-0.05,true));
+    head.add(box(0.05,0.05,0.16,horn,sd*0.13,0.28,-0.16,true));
+    head.add(box(0.16,0.11,0.05,lt,sd*0.2,0.02,-0.06,true));
+  }
+
+  function leg(sx,sz){
+    const hip=new THREE.Group(); hip.position.set(sx*0.18,0.4,sz*0.26);
+    hip.add(box(0.14,0.26,0.14,bd,0,-0.13,0));
+    hip.add(box(0.17,0.09,0.22,dark,0,-0.29,0.04,true));
+    g.add(hip); return hip;
+  }
+  const legs=[leg(-1,1),leg(1,1),leg(-1,-1),leg(1,-1)];
+
+  const wings=[];
+  for(let sd=-1;sd<=1;sd+=2){
+    const w=new THREE.Group(); w.position.set(sd*0.2,0.72,-0.02); g.add(w);
+    w.add(box(0.44,0.07,0.34,lt,sd*0.24,0,-0.04,true));
+    w.add(box(0.36,0.06,0.44,bd,sd*0.5,0.03,-0.2,true));
+    w.add(box(0.06,0.2,0.06,horn,sd*0.5,0.14,0.02,true));
+    wings.push({g:w,s:sd});
+  }
+
+  const tail=[]; let par=g;
+  for(let i=0;i<4;i++){
+    const t=new THREE.Group(); t.position.set(0,i?0:0.5,i?-0.24:-0.38);
+    t.add(box(0.24-i*0.04,0.2-i*0.03,0.28,bd,0,0,-0.12,true));
+    par.add(t); par=t; tail.push(t);
+  }
+  par.add(box(0.2,0.06,0.22,horn,0,0.04,-0.24,true));
+
+  return {group:g,head:head,baseScale:opt.scale||1,
+    angry(v){ eyeMat.color.setRGB(1,0.88-0.7*v,0.29-0.29*v) },
+    run(t,amt){
+      const sv=Math.sin(t)*amt*1.4;
+      legs[0].rotation.x=sv; legs[3].rotation.x=sv;
+      legs[1].rotation.x=-sv; legs[2].rotation.x=-sv;
+      neck.rotation.x=-0.08+Math.sin(t*0.9)*amt*0.5;
+      head.rotation.x=Math.sin(t*0.9+1)*amt*0.4;
+    },
+    jump(pp){
+      const sv=Math.sin(pp*Math.PI);
+      legs.forEach(function(L,i){ L.rotation.x=(i<2?-1:1)*sv*0.9 });
+      neck.rotation.x=-0.3*sv;
+      wings.forEach(function(w){ w.g.rotation.z=w.s*(0.2+sv*1.15) });
+    },
+    flow(t,wind){
+      const f=0.18+Math.sin(t*(5+wind*7))*(0.3+wind*0.5);
+      wings.forEach(function(w){ w.g.rotation.z=w.s*f });
+      tail.forEach(function(seg,i){ seg.rotation.y=Math.sin(t*3-i*0.8)*(0.12+wind*0.12) });
+      tail[0].rotation.x=-0.12+Math.sin(t*2)*0.06;
+    }};
+}
+
 /* ================= PARTICLES ================= */
 const parts=[];
 const SIZES={leaf:[0.16,0.03,0.11],rain:[0.03,0.2,0.03],ember:[0.07,0.07,0.07],dust:[0.1,0.1,0.1],
@@ -854,8 +934,10 @@ function spawnPlayer(){
   if(heroRig)scene.remove(heroRig.group);
   skin=byId(save.chosen[heroId])||SKINS.filter(function(x){return x.h===heroId})[0];
   if(!skin||skin.h!==heroId)skin=SKINS.filter(function(x){return x.h===heroId})[0];
-  heroRig=ninjaRig(skin.body,skin.accent,{cape:skin.cape,capeLen:skin.capeLen,aura:skin.aura,
-    hat:skin.hat,bulk:skin.bulk,scale:skin.scale,wings:skin.wings,detail:true});
+  heroRig = skin.creature==='dragon'
+    ? dragonRig(skin.body,skin.accent,{scale:skin.scale})
+    : ninjaRig(skin.body,skin.accent,{cape:skin.cape,capeLen:skin.capeLen,aura:skin.aura,
+        hat:skin.hat,bulk:skin.bulk,scale:skin.scale,wings:skin.wings,detail:true});
   scene.add(heroRig.group);
   player={x:0,y:1,ox:0,oy:1,anim:1,cd:0,face:Math.PI,sy:0,iframe:0};
   heroRig.group.rotation.y=Math.PI;
@@ -1798,6 +1880,29 @@ function spin(){
 const on=(id,fn)=>tap(document.getElementById(id),fn);
 on('toPlay',()=>{paintSkins();show('select')});
 on('toGacha',()=>{document.getElementById('prizeSlot').innerHTML='';show('gacha')});
+const CODES={
+  'какашечка':'boss_dragon'
+};
+function useCode(){
+  const el=document.getElementById('codeIn'), msg=document.getElementById('codeMsg');
+  const raw=(el.value||'').trim().toLowerCase().replace(/ё/g,'е');
+  if(!raw)return;
+  const id=CODES[raw];
+  if(!id){ msg.textContent='Такого кода нет.'; SFX.block(); el.value=''; return }
+  const sk=byId(id);
+  if(save.owned.indexOf(id)>=0){ msg.textContent=sk.name+' уже открыт.'; SFX.ui() }
+  else{
+    save.owned.push(id);
+    save.chosen[sk.h]=id;
+    persist(); paintSkins(); SFX.legend();
+    msg.textContent='Код принят: открыт «'+sk.name+'». Он ждёт во вкладке выбора скина.';
+  }
+  el.value='';
+}
+on('codeGo',useCode);
+document.getElementById('codeIn').addEventListener('keydown',function(e){
+  if(e.key==='Enter'){ e.preventDefault(); initAudio(); resumeAudio(); useCode() }
+});
 on('toBoard',()=>{show('board');paintBoard()});
 on('bBack',()=>show('home'));
 on('bRefresh',()=>{paintBoard();SFX.ui()});
