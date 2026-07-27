@@ -1443,7 +1443,8 @@ function bossUpdate(dt){
   const g=boss.g, u=g.userData;
   boss.t+=dt;
   g.position.y=1.35+Math.sin(T*2.1)*0.16;
-  g.position.x+=((Math.sin(T*0.5)*1.6)-g.position.x)*Math.min(1,dt*1.2);
+  g.position.x=0;                       // всегда по центру арены
+  g.rotation.y=Math.sin(T*0.8)*0.09;    // лёгкий доворот головы вместо смещения
   u.wings.forEach(function(w){ w.g.rotation.z=w.s*(0.2+Math.sin(T*4.6)*0.45) });
   u.tail.forEach(function(t,i){ t.rotation.y=Math.sin(T*2.4-i*0.7)*0.18 });
   u.neck.rotation.x=-0.1+Math.sin(T*1.6)*0.08;
