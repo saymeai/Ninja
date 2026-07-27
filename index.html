@@ -1403,7 +1403,7 @@ function makeFireball(){
 }
 /* подсветка дорожки: по этой колонке сейчас прилетит */
 function makeWarn(c){
-  const m=box(0.96,0.02,22,new THREE.MeshBasicMaterial({color:0xff3b1e,transparent:true,opacity:.34}),
+  const m=box(0.72,0.02,22,new THREE.MeshBasicMaterial({color:0xff3b1e,transparent:true,opacity:.34}),
     c,0.03,rowZ(BOSS_Z)+11,true);
   scene.add(m); return m;
 }
@@ -1454,11 +1454,14 @@ function bossFire(){
   SFX.aim();
 }
 function bossShoot(c){
-  const R=ROUNDS[boss.round];
+  const R=ROUNDS[Math.min(boss.round,ROUNDS.length-1)];   // защита от выхода за раунды
   const g=makeFireball();
-  g.position.set(c,0.75,rowZ(BOSS_Z)+0.9);
+  g.position.set(c,0.45,rowZ(BOSS_Z)+0.9);
   scene.add(g);
-  boss.fb.push({m:g,c:c,sp:R.sp});
+  const mark=box(0.9,0.02,0.9,new THREE.MeshBasicMaterial({color:0xff3b1e,transparent:true,opacity:.55}),
+    c,0.05,g.position.z,true);
+  scene.add(mark);
+  boss.fb.push({m:g,c:c,sp:R.sp,mark:mark});
   SFX.fireball();
 }
 function bossUpdate(dt){
@@ -1483,7 +1486,11 @@ function bossUpdate(dt){
     if(boss.fire<=0){ bossFire(); boss.fire=R.gap }
     if(boss.t>=R.t){
       boss.round++; boss.t=0;
-      if(boss.round>=ROUNDS.length){ boss.state='final'; document.getElementById('finBtn').classList.add('show') }
+      if(boss.round>=ROUNDS.length){
+        boss.state='final';
+        boss.warn.forEach(function(w){scene.remove(w.m)}); boss.warn.length=0;   // гасим недострелившие дорожки
+        document.getElementById('finBtn').classList.add('show');
+      }
       else boss.state='gap';
     }
   } else if(boss.state==='gap'){
@@ -1531,6 +1538,7 @@ function bossUpdate(dt){
     const b=boss.fb[i], m=b.m;
     m.position.z+=b.sp*dt;
     m.position.x=b.c;
+    if(b.mark){ b.mark.position.z=m.position.z; b.mark.material.opacity=0.35+Math.abs(Math.sin(T*14))*0.3 }
     m.rotation.z+=dt*6;
     m.userData.tips.forEach(function(t,k){ t.scale.z=1+Math.sin(T*24+k)*0.35 });
     if(Math.random()<0.7)spawnPart(b.c+rand(-.12,.12),0.75+rand(-.15,.15),m.position.z-0.35,'ember',0xff5a1e);
@@ -1538,10 +1546,12 @@ function bossUpdate(dt){
     const sameCell=(Math.round(b.c)===Math.round(player.x));
     const midJump=(player.anim<1);                 // в прыжке между клетками не задевает
     if(!dead&&!inv&&!midJump&&sameCell&&Math.abs(m.position.z-rowZ(player.y))<0.45){
-      scene.remove(m); boss.fb.splice(i,1);
+      scene.remove(m); if(b.mark)scene.remove(b.mark); boss.fb.splice(i,1);
       return die('ДРАКОН<em>СЖЁГ ТЕБЯ</em>');
     }
-    if(m.position.z>rowZ(player.y)+4||dead){ scene.remove(m); boss.fb.splice(i,1) }
+    if(m.position.z>rowZ(player.y)+4||dead){
+      scene.remove(m); if(b.mark)scene.remove(b.mark); boss.fb.splice(i,1);
+    }
   }
 }
 function bossBeam(){
@@ -1692,7 +1702,7 @@ function show(v){
 }
 function startRun(){
   if(boss.g)scene.remove(boss.g);
-  if(boss.fb)boss.fb.forEach(function(b){scene.remove(b.m)});
+  if(boss.fb)boss.fb.forEach(function(b){scene.remove(b.m); if(b.mark)scene.remove(b.mark)});
   if(boss.warn)boss.warn.forEach(function(w){scene.remove(w.m)});
   boss={state:'none',t:0,round:0,fire:0,fb:[],warn:[],g:null,done:false};
   document.getElementById('cut').classList.remove('on');
@@ -1809,7 +1819,9 @@ function frame(now){
   let dt=Math.min((now-last)/1000,.05); last=now;
   if(ult.on&&ult.t<0.7)dt*=0.35;                 // короткое слоу-мо
   T+=dt;
-  if(state==='play')update(dt);
+  if(state==='play'){
+    try{ update(dt) }catch(err){ console.error('update error:',err) }
+  }
   else{
     camera.position.set(6.5,8.5,camZ+7.5); camera.lookAt(0,0,camZ);
     if(heroRig){heroRig.run(T*2.4,0.16);heroRig.flow(T,0.35)}
