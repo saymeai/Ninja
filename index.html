@@ -301,6 +301,7 @@ const SFX={
   stomp(){const t=A.ctx?A.ctx.currentTime:0;tone(90,0.3,'sine',0.3,t,40);noise(0.24,0.2,60,900,t)},
   roar(){const t=A.ctx?A.ctx.currentTime:0;
     tone(90,1.0,'sawtooth',0.22,t,50);tone(140,0.8,'square',0.12,t+0.05,70);noise(0.9,0.18,80,900,t)},
+  aim(){const t=A.ctx?A.ctx.currentTime:0;tone(300,0.14,'square',0.08,t,520)},
   fireball(){const t=A.ctx?A.ctx.currentTime:0;tone(700,0.22,'sawtooth',0.12,t,260);noise(0.2,0.1,600,3000,t)},
   beam(){const t=A.ctx?A.ctx.currentTime:0;
     tone(120,1.4,'sawtooth',0.22,t,1800);noise(1.4,0.2,500,7000,t);
@@ -1329,88 +1330,114 @@ function update(dt){
 
 
 /* ================= БОСС: СИНИЙ ДРАКОН ================= */
-const BOSS_ROW=150, ARENA_A=BOSS_ROW, ARENA_B=BOSS_ROW+6, BOSS_Z=BOSS_ROW+8;
+const BOSS_ROW=150, ARENA_A=BOSS_ROW, ARENA_B=BOSS_ROW+5, BOSS_Z=BOSS_ROW+7;
 const ROUNDS=[
-  {t:10,gap:1.15,sp:5.6,spread:0},
-  {t:10,gap:0.92,sp:6.4,spread:1},
-  {t:10,gap:0.74,sp:7.2,spread:2}
+  {t:10,gap:1.5,sp:5.0,lanes:1,warn:0.7},
+  {t:10,gap:1.25,sp:5.8,lanes:2,warn:0.6},
+  {t:10,gap:1.05,sp:6.6,lanes:3,warn:0.5}
 ];
-let boss={state:'none',t:0,round:0,fire:0,fb:[],g:null,done:false};
+let boss={state:'none',t:0,round:0,fire:0,fb:[],warn:[],g:null,done:false};
 
 function buildDragon(){
   const g=new THREE.Group();
   const bd=M(0x2f6fb0), lt=M(0x4f9fd8), bel=M(0xbfe6ff), horn=M(0xe8e0cf), dark=M(0x14304d);
-  g.add(box(1.9,1.15,2.6,bd,0,0,0));
-  g.add(box(1.5,0.3,2.2,bel,0,-0.5,0.05,true));
-  const neck=new THREE.Group(); neck.position.set(0,0.5,1.15); g.add(neck);
-  neck.add(box(0.9,0.8,1.1,bd,0,0.2,0.4));
-  const head=new THREE.Group(); head.position.set(0,0.55,1.05); neck.add(head);
-  head.add(box(1.05,0.8,1.2,bd,0,0,0.2));
-  head.add(box(0.8,0.34,0.6,dark,0,-0.3,0.7,true));
-  head.add(box(0.9,0.3,0.5,lt,0,0.25,0.55,true));
+  // корпус — компактный, мордой на игрока (+z)
+  g.add(box(1.05,0.7,1.3,bd,0,0,-0.1));
+  g.add(box(0.8,0.2,1.1,bel,0,-0.3,-0.05,true));
+  const neck=new THREE.Group(); neck.position.set(0,0.3,0.5); g.add(neck);
+  neck.add(box(0.5,0.5,0.6,bd,0,0.12,0.22));
+  const head=new THREE.Group(); head.position.set(0,0.34,0.52); neck.add(head);
+  head.add(box(0.66,0.5,0.66,bd,0,0,0.12));
+  head.add(box(0.5,0.2,0.36,dark,0,-0.18,0.42,true));
+  head.add(box(0.56,0.16,0.3,lt,0,0.16,0.34,true));
   for(let sd=-1;sd<=1;sd+=2){
-    head.add(box(0.16,0.5,0.16,horn,sd*0.32,0.5,-0.15,true));
-    head.add(box(0.13,0.13,0.5,horn,sd*0.36,0.72,-0.42,true));
-    const e=box(0.16,0.14,0.1,new THREE.MeshBasicMaterial({color:0xffe14a}),sd*0.28,0.1,0.72,true);
-    head.add(e);
+    head.add(box(0.1,0.3,0.1,horn,sd*0.2,0.3,-0.08,true));
+    head.add(box(0.08,0.08,0.3,horn,sd*0.22,0.44,-0.26,true));
+    head.add(box(0.11,0.09,0.07,new THREE.MeshBasicMaterial({color:0xffe14a}),sd*0.17,0.06,0.43,true));
   }
   const wings=[];
   for(let sd=-1;sd<=1;sd+=2){
-    const w=new THREE.Group(); w.position.set(sd*0.9,0.5,-0.1); g.add(w);
-    w.add(box(2.3,0.12,1.5,lt,sd*1.15,0,-0.3,true));
-    w.add(box(1.6,0.1,1.9,bd,sd*2.0,0.05,-0.9,true));
-    w.add(box(0.16,0.5,0.16,horn,sd*2.3,0.3,0.1,true));
+    const w=new THREE.Group(); w.position.set(sd*0.5,0.3,-0.2); g.add(w);
+    w.add(box(1.2,0.08,0.85,lt,sd*0.6,0,-0.15,true));
+    w.add(box(0.85,0.07,1.05,bd,sd*1.05,0.04,-0.5,true));
     wings.push({g:w,s:sd});
   }
-  const tail=[]; let par=g; 
-  for(let i=0;i<5;i++){
-    const t=new THREE.Group(); t.position.set(0,i?0:-0.1,i?-0.62:-1.25);
-    t.add(box(0.9-i*0.13,0.5-i*0.06,0.7,bd,0,0,-0.3,true));
+  const tail=[]; let par=g;
+  for(let i=0;i<4;i++){
+    const t=new THREE.Group(); t.position.set(0,i?0:-0.05,i?-0.38:-0.7);
+    t.add(box(0.5-i*0.09,0.3-i*0.04,0.42,bd,0,0,-0.18,true));
     par.add(t); par=t; tail.push(t);
   }
-  par.add(box(0.5,0.12,0.7,horn,0,0.1,-0.55,true));
+  par.add(box(0.3,0.08,0.4,horn,0,0.06,-0.32,true));
   g.userData={wings:wings,tail:tail,neck:neck,head:head};
-  g.position.set(0,2.4,rowZ(BOSS_Z));
+  g.position.set(0,1.35,rowZ(BOSS_Z));
   scene.add(g);
   return g;
 }
 function bossStart(){
-  boss={state:'intro',t:0,round:0,fire:0,fb:[],g:buildDragon(),done:false};
+  boss={state:'intro',t:0,round:0,fire:0,fb:[],warn:[],g:buildDragon(),done:false};
+  document.getElementById('cutWho').textContent='СИНИЙ ДРАКОН';
+  document.getElementById('cutLine').textContent='БИТВА НАЧИНАЕТСЯ';
+  document.getElementById('cut').classList.add('on');
   document.getElementById('modeTimer').style.display='block';
-  document.getElementById('modeTimer').textContent='СИНИЙ ДРАКОН';
-  SFX.roar(); duckMusic(2.2);
+  document.getElementById('modeTimer').textContent='';
+  SFX.roar(); duckMusic(2.4);
+}
+/* красный шар: ядро + языки пламени */
+function makeFireball(){
+  const g=new THREE.Group();
+  const core=new THREE.Mesh(new THREE.SphereGeometry(0.3,12,10),
+    new THREE.MeshBasicMaterial({color:0xff3b1e}));
+  const inner=new THREE.Mesh(new THREE.SphereGeometry(0.17,10,8),
+    new THREE.MeshBasicMaterial({color:0xffd27a}));
+  g.add(core); g.add(inner);
+  const tips=[];
+  for(let i=0;i<5;i++){
+    const t=box(0.13,0.13,0.42,new THREE.MeshBasicMaterial({color:0xff7a2a}),0,0,-0.32,true);
+    const a=(i/5)*Math.PI*2;
+    t.position.set(Math.sin(a)*0.16,Math.cos(a)*0.16,-0.34);
+    g.add(t); tips.push(t);
+  }
+  g.userData.tips=tips;
+  return g;
+}
+/* подсветка дорожки: по этой колонке сейчас прилетит */
+function makeWarn(c){
+  const m=box(0.86,0.02,22,new THREE.MeshBasicMaterial({color:0xff3b1e,transparent:true,opacity:.34}),
+    c,0.03,rowZ(BOSS_Z)+11,true);
+  scene.add(m); return m;
 }
 function bossFire(){
-  const R=ROUNDS[boss.round], bx=boss.g.position.x, bz=boss.g.position.z;
-  const px=player.x, pz=rowZ(player.y);
-  const shots=[0];
-  if(R.spread>=1)shots.push(0.26);
-  if(R.spread>=2){shots.push(-0.26); }
-  shots.forEach(function(off){
-    const dx=px-bx+off*4, dz=pz-bz;
-    const L=Math.max(0.001,Math.hypot(dx,dz));
-    const m=new THREE.Mesh(new THREE.SphereGeometry(0.34,12,10),
-      new THREE.MeshBasicMaterial({color:0x63c8ff}));
-    m.position.set(bx,1.2,bz+1.2);
-    scene.add(m);
-    boss.fb.push({m:m,vx:dx/L*R.sp,vz:dz/L*R.sp});
-  });
+  const R=ROUNDS[boss.round], lanes=[];
+  while(lanes.length<R.lanes){
+    const c=ri(-HALF,HALF);
+    if(lanes.indexOf(c)<0)lanes.push(c);
+  }
+  lanes.forEach(function(c){ boss.warn.push({c:c,t:R.warn,m:makeWarn(c)}) });
+  SFX.aim();
+}
+function bossShoot(c){
+  const R=ROUNDS[boss.round];
+  const g=makeFireball();
+  g.position.set(c,0.75,rowZ(BOSS_Z)+0.9);
+  scene.add(g);
+  boss.fb.push({m:g,c:c,sp:R.sp});
   SFX.fireball();
 }
 function bossUpdate(dt){
   if(boss.state==='none'||boss.state==='done')return;
   const g=boss.g, u=g.userData;
   boss.t+=dt;
-  g.position.y=2.4+Math.sin(T*1.8)*0.28;
-  u.wings.forEach(function(w){ w.g.rotation.z=w.s*(0.2+Math.sin(T*4.2)*0.5) });
-  u.tail.forEach(function(t,i){ t.rotation.y=Math.sin(T*2.2-i*0.6)*0.16 });
-  u.neck.rotation.x=-0.12+Math.sin(T*1.4)*0.07;
-  g.position.x+=( (Math.sin(T*0.7)*3.4) - g.position.x)*Math.min(1,dt*1.4);
-  g.lookAt(player.x,g.position.y,rowZ(player.y)-6);
+  g.position.y=1.35+Math.sin(T*2.1)*0.16;
+  g.position.x+=((Math.sin(T*0.5)*1.6)-g.position.x)*Math.min(1,dt*1.2);
+  u.wings.forEach(function(w){ w.g.rotation.z=w.s*(0.2+Math.sin(T*4.6)*0.45) });
+  u.tail.forEach(function(t,i){ t.rotation.y=Math.sin(T*2.4-i*0.7)*0.18 });
+  u.neck.rotation.x=-0.1+Math.sin(T*1.6)*0.08;
 
   const tm=document.getElementById('modeTimer');
   if(boss.state==='intro'){
-    if(boss.t>1.8){ boss.state='round'; boss.t=0; boss.fire=0.6 }
+    if(boss.t>1.35)document.getElementById('cut').classList.remove('on');
+    if(boss.t>1.9){ boss.state='round'; boss.t=0; boss.fire=0.5 }
   } else if(boss.state==='round'){
     const R=ROUNDS[boss.round];
     tm.textContent='РАУНД '+(boss.round+1)+'/3 · '+Math.max(0,R.t-boss.t).toFixed(1)+'с';
@@ -1419,11 +1446,11 @@ function bossUpdate(dt){
     if(boss.t>=R.t){
       boss.round++; boss.t=0;
       if(boss.round>=ROUNDS.length){ boss.state='final'; document.getElementById('finBtn').classList.add('show') }
-      else { boss.state='gap'; }
+      else boss.state='gap';
     }
   } else if(boss.state==='gap'){
     tm.textContent='РАУНД '+(boss.round+1)+' ГОТОВИТСЯ';
-    if(boss.t>1.6){ boss.state='round'; boss.t=0; boss.fire=0.5 }
+    if(boss.t>1.6){ boss.state='round'; boss.t=0; boss.fire=0.4 }
   } else if(boss.state==='final'){
     tm.textContent='ДОБЕЙ ЕГО';
   } else if(boss.state==='beam'){
@@ -1432,13 +1459,14 @@ function bossUpdate(dt){
     if(boss.t>1.1&&!boss.blown){
       boss.blown=true;
       for(let i=0;i<90;i++)
-        spawnPart(g.position.x+rand(-2,2),g.position.y+rand(-1.4,1.4),g.position.z+rand(-2,2),'spark',pick([0x63c8ff,0xffffff,0x2f6fb0]));
+        spawnPart(g.position.x+rand(-1.2,1.2),g.position.y+rand(-0.8,0.8),g.position.z+rand(-1.2,1.2),
+          'spark',pick([0x63c8ff,0xffffff,0x2f6fb0]));
       scene.remove(g);
       SFX.bossDie();
       const w=document.getElementById('white'); w.style.opacity=.9;
       setTimeout(function(){w.style.opacity=0},140);
     }
-    if(boss.t>1.9){ boss.state='fw'; boss.t=0; bossWin(); }
+    if(boss.t>1.9){ boss.state='fw'; boss.t=0; bossWin() }
   } else if(boss.state==='fw'){
     tm.textContent='ДРАКОН ПОВЕРЖЕН';
     if(Math.random()<dt*9){
@@ -1446,24 +1474,34 @@ function bossUpdate(dt){
       for(let i=0;i<26;i++)spawnPart(fx0,rand(2.2,4.2),fz0,'spark',c);
       SFX.firework();
     }
-    if(boss.t>3.2){ boss.state='done'; tm.style.display='none'; viewSize=11; applyCam(); }
+    if(boss.t>3.2){ boss.state='done'; tm.style.display='none'; viewSize=11; applyCam() }
   }
 
-  // огненные шары
+  const dead=(boss.state==='beam'||boss.state==='fw'||boss.state==='done');
+
+  // предупреждения о дорожках
+  for(let i=boss.warn.length-1;i>=0;i--){
+    const w=boss.warn[i];
+    w.t-=dt;
+    w.m.material.opacity=0.2+Math.abs(Math.sin(T*16))*0.3;
+    if(dead){ scene.remove(w.m); boss.warn.splice(i,1); continue }
+    if(w.t<=0){ scene.remove(w.m); boss.warn.splice(i,1); bossShoot(w.c) }
+  }
+
+  // шары летят строго по своей колонке
   for(let i=boss.fb.length-1;i>=0;i--){
-    const b=boss.fb[i];
-    b.m.position.x+=b.vx*dt; b.m.position.z+=b.vz*dt;
-    b.m.scale.setScalar(1+Math.sin(T*20+i)*0.12);
-    if(Math.random()<0.6)spawnPart(b.m.position.x,b.m.position.y,b.m.position.z,'ember',0x63c8ff);
-    const dead=(boss.state==='beam'||boss.state==='fw'||boss.state==='done');
-    if(!dead&&!(mode.on&&MODE_DEF[mode.kind].invuln)&&!(player.iframe>0)&&Math.abs(b.m.position.x-player.x)<0.55&&
-       Math.abs(b.m.position.z-rowZ(player.y))<0.55){
-      scene.remove(b.m); boss.fb.splice(i,1);
+    const b=boss.fb[i], m=b.m;
+    m.position.z+=b.sp*dt;
+    m.position.x=b.c;
+    m.rotation.z+=dt*6;
+    m.userData.tips.forEach(function(t,k){ t.scale.z=1+Math.sin(T*24+k)*0.35 });
+    if(Math.random()<0.7)spawnPart(b.c+rand(-.2,.2),0.75+rand(-.2,.2),m.position.z-0.4,'ember',0xff5a1e);
+    const inv=(mode.on&&MODE_DEF[mode.kind].invuln)||player.iframe>0;
+    if(!dead&&!inv&&Math.abs(b.c-player.x)<0.5&&Math.abs(m.position.z-rowZ(player.y))<0.5){
+      scene.remove(m); boss.fb.splice(i,1);
       return die('ДРАКОН<em>СЖЁГ ТЕБЯ</em>');
     }
-    if(b.m.position.z>rowZ(player.y)+7||Math.abs(b.m.position.x)>14||dead&&b.m.position.z>rowZ(player.y)+2){
-      scene.remove(b.m); boss.fb.splice(i,1);
-    }
+    if(m.position.z>rowZ(player.y)+4||dead){ scene.remove(m); boss.fb.splice(i,1) }
   }
 }
 function bossBeam(){
@@ -1615,7 +1653,9 @@ function show(v){
 function startRun(){
   if(boss.g)scene.remove(boss.g);
   if(boss.fb)boss.fb.forEach(function(b){scene.remove(b.m)});
-  boss={state:'none',t:0,round:0,fire:0,fb:[],g:null,done:false};
+  if(boss.warn)boss.warn.forEach(function(w){scene.remove(w.m)});
+  boss={state:'none',t:0,round:0,fire:0,fb:[],warn:[],g:null,done:false};
+  document.getElementById('cut').classList.remove('on');
   breath=0;
   document.getElementById('finBtn').classList.remove('show');
   document.getElementById('modeTimer').style.display='none';
