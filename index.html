@@ -1409,10 +1409,24 @@ function makeWarn(c){
 }
 function bossFire(){
   const R=ROUNDS[boss.round], lanes=[];
-  while(lanes.length<R.lanes){
-    const c=ri(-HALF,HALF);
-    if(lanes.indexOf(c)<0)lanes.push(c);
+  const add=function(c){
+    c=clamp(Math.round(c),-HALF,HALF);
+    if(lanes.indexOf(c)<0){ lanes.push(c); return true }
+    return false;
+  };
+  // 1) главный выстрел — точно в колонку, где сейчас стоит игрок
+  const me=clamp(Math.round(player.x),-HALF,HALF);
+  add(me);
+  // 2) добавочные дорожки — рядом с игроком, но с гарантированным путём для отхода
+  if(R.lanes>=2){
+    const side=Math.random()<0.5?-1:1;
+    if(!add(me+side*ri(2,3)))add(me-side*ri(2,3));
   }
+  if(R.lanes>=3){
+    const side=Math.random()<0.5?-1:1;        // одну соседнюю зажимаем...
+    if(!add(me+side))add(me-side);            // ...противоположная остаётся свободной
+  }
+  while(lanes.length<R.lanes)add(ri(-HALF,HALF));
   lanes.forEach(function(c){ boss.warn.push({c:c,t:R.warn,m:makeWarn(c)}) });
   SFX.aim();
 }
