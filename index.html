@@ -1881,7 +1881,9 @@ const on=(id,fn)=>tap(document.getElementById(id),fn);
 on('toPlay',()=>{paintSkins();show('select')});
 on('toGacha',()=>{document.getElementById('prizeSlot').innerHTML='';show('gacha')});
 const CODES={
-  'какашечка':'boss_dragon'
+  'какашечка':'boss_dragon',
+  'эпикрэн':'ren_tide',
+  'эпикрен':'ren_tide'
 };
 function useCode(){
   const el=document.getElementById('codeIn'), msg=document.getElementById('codeMsg');
